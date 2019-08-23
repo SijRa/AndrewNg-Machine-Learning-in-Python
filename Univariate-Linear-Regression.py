@@ -3,12 +3,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
 
-## LINEAR REGRESSION USING GRADIENT DECENT ##
+## UNIVARIATE LINEAR REGRESSION ##
 
 Optimise_Theta = True
 
 LinearRegressionGraph = True
-GradientDecentGraph = True
+GradientDescentGraph = True
 
 df = pd.read_csv("ex1data1.txt", header=None)
 df.columns = ['PopulationOfCity', 'ProfitOfFoodTruck']
@@ -20,6 +20,7 @@ Ones = [x/x for x in range(1,len(X.index) + 1)]
 dfOnes = pd.DataFrame(Ones)
 X.insert(0, column='Constant', value=dfOnes)
 
+# Gradient Descent
 theta = np.zeros((2,1))
 iterations = 1500
 alpha = 0.02
@@ -46,7 +47,7 @@ def SumFunct(X, y, theta, j, m):
             total += error * X.iloc[i].values[1]
     return total
 
-def GradientDecent(X, y, theta, alpha, iterations):
+def GradientDescent(X, y, theta, alpha, iterations):
     m = len(y.index)
     tempTheta = theta
     for i in range(iterations):
@@ -56,9 +57,6 @@ def GradientDecent(X, y, theta, alpha, iterations):
         print("Iteration: " + str(i) + "\nJ(0) = " + str(CostFunction(X, y, theta)))
         print("Theta values:\n", theta)
     return theta
-
-if (Optimise_Theta):
-    theta = GradientDecent(X, y, theta, alpha, iterations)
 
 # Linear Regression
 if(LinearRegressionGraph):
@@ -73,7 +71,7 @@ if(LinearRegressionGraph):
     plt.ylabel("Profit in $10,000s")
 
 # Cost Function Mapping
-if(GradientDecentGraph):
+if(GradientDescentGraph):
     theta_0 = np.linspace(-10, 10, 100)
     theta_1 = np.linspace(-1, 4, 100)
     J_vals = np.zeros((len(theta_0),len(theta_1)))
@@ -84,9 +82,7 @@ if(GradientDecentGraph):
             J_vals[i,j] = CostFunction(X, y, t)
             count+=1
             print("Percentage complete: " + str(round((np.divide(count,10000) * 100), 2)) +"%")
-
     X_plot, Y_plot = np.meshgrid(theta_0, theta_1)
-
     fig = plt.figure()
     ax = plt.axes(projection='3d')
     ax.plot_wireframe(X_plot, Y_plot, J_vals, color='green')
@@ -98,5 +94,8 @@ if(GradientDecentGraph):
     ax.plot(theta[1], theta[0], CostFunction(X, y, theta), label='Optimal θ', markeredgecolor='red', marker='x', markersize=5)
     ax.legend()
 
-if(LinearRegressionGraph or GradientDecentGraph):
-    plt.show()
+## OPTIMISE θ ## 
+if (Optimise_Theta):
+    theta = GradientDescent(X, y, theta, alpha, iterations)
+    if(LinearRegressionGraph or GradientDescentGraph):
+        plt.show()
