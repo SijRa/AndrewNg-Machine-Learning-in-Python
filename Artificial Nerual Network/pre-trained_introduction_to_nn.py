@@ -41,7 +41,6 @@ def SigmoidFunction(value):
 
 def Predict(theta1, theta2, X):
     m = X.shape[0]
-    num_labels = theta2.shape[0]
     hidden1 = pd.DataFrame(SigmoidFunction(np.dot(X, theta1.T)))
     Ones = [x/x for x in range(1, m + 1)]
     # Bias Added
