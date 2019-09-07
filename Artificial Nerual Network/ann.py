@@ -41,7 +41,7 @@ X = df_digits.copy().to_numpy()
 X = np.insert(X, 0, 1, axis=1)
 
 y = df_labels.copy()
-lam = 0.5
+lam = 1
 
 input_layer_size = 400 # 20x20 images of digits
 hidden_layer_size = 25
@@ -98,28 +98,20 @@ def nnGradient(nn_params, input_layer_size, hidden_layer_size, num_labels, X, y,
     Theta1 = nn_params[0:(hidden_layer_size * (input_layer_size + 1))].reshape(hidden_layer_size, input_layer_size + 1)
     Theta2 = nn_params[(hidden_layer_size * (input_layer_size + 1)):].reshape(num_labels, hidden_layer_size + 1)
     m = X.shape[0]
-    D_1 = np.zeros(Theta1.shape)
-    D_2 = np.zeros(Theta2.shape)
-    for i in range(m):
-        # FeedForward Propagation
-        Xi = X[i,:] # Input Layer
-        Yi = y[i,:] # Y value
-        # Hidden Layer
-        Z_2 = np.dot(Theta1, Xi)
-        A_2 = SigmoidFunction(Z_2)
-        A_2 = np.insert(A_2, 0, 1, axis=0) # Bias
-        # Output Layer
-        Z_3 = np.dot(Theta2, A_2)
-        A_3 = SigmoidFunction(Z_3)
-        # Backpropagation
-        d_3 = A_3 - Yi
-        d_2 = np.multiply(np.dot((Theta2).T, d_3), np.insert(SigmoidGradient(Z_2), 0, 1, axis=0))
-        # Gradient
-        D_2 += d_3.reshape((num_labels,1)) * A_2.reshape((hidden_layer_size + 1,1)).T
-        D_1 += d_2[1:].reshape((hidden_layer_size,1)) * Xi.reshape((X.shape[1],1)).T
-    # Unregularised Gradient
-    D_2 = np.divide(D_2, m)
-    D_1 = np.divide(D_1, m)
+    # FeedForward Propagation
+    Z_2 = np.dot(Theta1, X.T)
+    A_2 = SigmoidFunction(Z_2)
+    A_2 = np.insert(A_2, 0, 1, axis=0) # Bias
+    # Hidden Layer
+    Z_3 = np.dot(Theta2, A_2)
+    A_3 = SigmoidFunction(Z_3)
+    # Backpropagation
+    d_3 = A_3 - y.T
+    d_2 = np.dot(Theta2.T, d_3) * np.insert(SigmoidGradient(Z_2), 0, 1, axis=0)
+    D_2 = np.dot(d_3, A_2.T)
+    D_1 = np.dot(d_2[1:], X)
+    D_2 /= m
+    D_1 /= m
     # Regularisation
     Grad2_0 = D_2[:,0]
     Grad2 = D_2 + np.divide(Theta2, m)
@@ -127,10 +119,10 @@ def nnGradient(nn_params, input_layer_size, hidden_layer_size, num_labels, X, y,
     Grad1_0 = D_1[:,0]
     Grad1 = D_1 + np.divide(Theta1, m)
     Grad1[:,0] = Grad1_0
-    return np.concatenate((D_1.flatten(), D_2.flatten()))
+    return np.concatenate((Grad1.flatten(), Grad2.flatten()))
 
 def Train(parameters):
-    optimialParameters = optimize.fmin_cg(f=nnCostFunction, x0=parameters, maxiter=400, fprime=nnGradient, args=((input_layer_size, hidden_layer_size, num_labels, X, yVectors, lam)))
+    optimialParameters = optimize.fmin_cg(f=nnCostFunction, x0=parameters, fprime=nnGradient, args=((input_layer_size, hidden_layer_size, num_labels, X, yVectors, lam)))
     return optimialParameters
 
 def Predict(parameters, X):
