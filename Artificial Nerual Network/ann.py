@@ -1,11 +1,12 @@
 import mat4py.loadmat as load
 import pandas as pd
 import numpy as np
-
 import matplotlib.pyplot as plt
+from scipy.optimize import optimize
 
 display_Digits = False
-
+display_Hidden_Layer = True
+CheckGradient = False
 
 # Extract and format data from MATLAB files to Pandas dataframes
 data = load('ex4data1.mat')
@@ -35,12 +36,12 @@ df_theta2 = pd.DataFrame(theta2)
 theta1 = df_theta1.to_numpy().flatten() # Vectorized
 theta2 = df_theta2.to_numpy().flatten() # Vectorized
 
-X = df_digits.to_numpy()
+X = df_digits.copy().to_numpy()
 # Bias added
 X = np.insert(X, 0, 1, axis=1)
 
-y = df_labels
-lam = 1
+y = df_labels.copy()
+lam = 0.5
 
 input_layer_size = 400 # 20x20 images of digits
 hidden_layer_size = 25
@@ -50,12 +51,12 @@ nn_params = np.concatenate((theta1,theta2))
 
 # Vectorize labels
 yVectorsEmpty = []
-y = y.replace({1:0, 2:1, 3:2, 4:3, 5:4, 6:5, 7:6, 8:7, 9:8, 10:9})
-for value in y[0]:
+yTemp = y.replace({1:0, 2:1, 3:2, 4:3, 5:4, 6:5, 7:6, 8:7, 9:8, 10:9})
+for value in yTemp[0]:
     vector = np.zeros(num_labels)
     vector[value] = 1
     yVectorsEmpty.append(vector)
-yVectors = np.array(yVectorsEmpty).reshape((5000,10))
+yVectors = np.array(yVectorsEmpty).reshape((y.shape[0],num_labels))
 
 def SigmoidFunction(value):
     return np.divide(1, 1 + np.exp(-value))
@@ -78,12 +79,29 @@ def nnCostFunction(nn_params, input_layer_size, hidden_layer_size, num_labels, X
     hidden_layer = np.insert(hidden_layer, 0, 1, axis=1)
     output_layer = SigmoidFunction(np.dot(hidden_layer, Theta2.T))
     # Regularised Cost
-    Cost = np.divide(np.sum(-y * np.log(output_layer) - (1 - y) * np.log(1 - output_layer)), m) + np.divide(lam * (np.sum(Theta1[:,1:] ** 2) + np.sum(Theta2[:,1:] ** 2)), 2 * m)
+    return np.divide(np.sum(-y * np.log(output_layer) - (1 - y) * np.log(1 - output_layer)), m) + np.divide(lam * (np.sum(Theta1[:,1:] ** 2) + np.sum(Theta2[:,1:] ** 2)), 2 * m)
 
-    D_2 = Theta2
-    D_1 = Theta1
+def NumericalGradient(testParam):
+    e = 1e-4
+    gradApprox = np.zeros(testParam.shape)
+    for i in range(testParam.shape[0]):
+        thetaPlus = testParam.copy()
+        thetaPlus[i] = thetaPlus[i] + e
+        thetaMinus = testParam.copy()
+        thetaMinus[i] = thetaMinus[i] - e
+        gradApprox[i] = np.divide(
+            nnCostFunction(thetaPlus, input_layer_size, hidden_layer_size, num_labels, X, yVectors, lam) - nnCostFunction(thetaMinus, input_layer_size, hidden_layer_size, num_labels, X, yVectors, lam),
+            2 * e)
+    return gradApprox
 
+def nnGradient(nn_params, input_layer_size, hidden_layer_size, num_labels, X, y, lam):
+    Theta1 = nn_params[0:(hidden_layer_size * (input_layer_size + 1))].reshape(hidden_layer_size, input_layer_size + 1)
+    Theta2 = nn_params[(hidden_layer_size * (input_layer_size + 1)):].reshape(num_labels, hidden_layer_size + 1)
+    m = X.shape[0]
+    D_1 = np.zeros(Theta1.shape)
+    D_2 = np.zeros(Theta2.shape)
     for i in range(m):
+        # FeedForward Propagation
         Xi = X[i,:] # Input Layer
         Yi = y[i,:] # Y value
         # Hidden Layer
@@ -93,37 +111,65 @@ def nnCostFunction(nn_params, input_layer_size, hidden_layer_size, num_labels, X
         # Output Layer
         Z_3 = np.dot(Theta2, A_2)
         A_3 = SigmoidFunction(Z_3)
+        # Backpropagation
         d_3 = A_3 - Yi
-
-        d_2 = np.multiply(np.dot((Theta2[:,1]**2).T, d_3), SigmoidGradient(Z_2))
-
+        d_2 = np.multiply(np.dot((Theta2).T, d_3), np.insert(SigmoidGradient(Z_2), 0, 1, axis=0))
         # Gradient
-        D_2 = D_2 + d_3.reshape((10,1)) * A_2.reshape((26,1)).T
-        D_1 = D_1 + d_2.reshape((25,1)) * Xi.reshape((401,1)).T
-        
-        # Unregularised Gradient
-        D_2 = np.divide(1, m) * D_2
-        D_1 = np.divide(1, m) * D_1
+        D_2 += d_3.reshape((num_labels,1)) * A_2.reshape((hidden_layer_size + 1,1)).T
+        D_1 += d_2[1:].reshape((hidden_layer_size,1)) * Xi.reshape((X.shape[1],1)).T
+    # Unregularised Gradient
+    D_2 = np.divide(D_2, m)
+    D_1 = np.divide(D_1, m)
+    # Regularisation
+    Grad2_0 = D_2[:,0]
+    Grad2 = D_2 + np.divide(Theta2, m)
+    Grad2[:,0] = Grad2_0
+    Grad1_0 = D_1[:,0]
+    Grad1 = D_1 + np.divide(Theta1, m)
+    Grad1[:,0] = Grad1_0
+    return np.concatenate((D_1.flatten(), D_2.flatten()))
 
-        break
+def Train(parameters):
+    optimialParameters = optimize.fmin_cg(f=nnCostFunction, x0=parameters, maxiter=400, fprime=nnGradient, args=((input_layer_size, hidden_layer_size, num_labels, X, yVectors, lam)))
+    return optimialParameters
 
+def Predict(parameters, X):
+    Theta1 = parameters[0:(hidden_layer_size * (input_layer_size + 1))].reshape(hidden_layer_size, input_layer_size + 1)
+    Theta2 = parameters[(hidden_layer_size * (input_layer_size + 1)):].reshape(num_labels, hidden_layer_size + 1)
+    m = X.shape[0]
+    hidden_layer = SigmoidFunction(np.dot(X, Theta1.T))
+    # Bias Added
+    hidden_layer = np.insert(hidden_layer, 0, 1, axis=1)
+    output_layer = SigmoidFunction(np.dot(hidden_layer, Theta2.T))
+    df = pd.DataFrame(data=output_layer)
+    return (df.idxmax(axis=1) + 1).to_numpy() # Predictions changed from 0-9 to 1-10
 
-nnCostFunction(nn_params, input_layer_size, hidden_layer_size, num_labels, X, yVectors, lam)
+inital_Theta1 = RandomInitalWeights(input_layer_size, hidden_layer_size)
+inital_Theta2 = RandomInitalWeights(hidden_layer_size, num_labels)
+inital_nn_params = np.concatenate((inital_Theta1.flatten(), inital_Theta2.flatten()))
 
+optimial_parameters = Train(inital_nn_params)
 
+preds = Predict(optimial_parameters, X)
+correct = (y.to_numpy().flatten() == preds).astype(int)
+print("Accuracy: " + str(np.sum(correct)*100/X.shape[0]) + "%")
 
-initial_Theta1 = RandomInitalWeights(input_layer_size, hidden_layer_size)
-initial_Theta2 = RandomInitalWeights(hidden_layer_size, num_labels)
+if(CheckGradient):
+    checkGrad = NumericalGradient(inital_nn_params)
+    checkTheta1 = checkGrad[0:(hidden_layer_size * (input_layer_size + 1))].reshape(hidden_layer_size, input_layer_size + 1)
+    checkTheta2 = checkGrad[(hidden_layer_size * (input_layer_size + 1)):].reshape(num_labels, hidden_layer_size + 1)
 
-inital_nn_params = np.concatenate((initial_Theta1.flatten(), initial_Theta2.flatten()))
-
-
-
-
-
-
-
-
+if(display_Hidden_Layer):
+    Hidden_Layer_Theta = optimial_parameters[0:(hidden_layer_size * (input_layer_size + 1))].reshape(hidden_layer_size, input_layer_size + 1)[:,1:]
+    fig = plt.figure(figsize=(10, 10))
+    columns = 5
+    rows = 5
+    for i in range(hidden_layer_size):
+        pixels = Hidden_Layer_Theta[i].reshape((20,20))
+        fig.add_subplot(rows, columns, i + 1)
+        plt.axis('off')
+        plt.imshow(pixels, cmap='gray')
+    plt.show()
 
 if(display_Digits):
     fig = plt.figure(figsize=(10, 10))
