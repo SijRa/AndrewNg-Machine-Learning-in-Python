@@ -7,10 +7,10 @@ from nltk.stem import PorterStemmer
 from nltk.tokenize import RegexpTokenizer
 import mat4py.loadmat as load
 
-emailData = open('emailSample1.txt', 'r').read()
-
 vocabList = pd.read_csv('vocab.txt',header=None)
 vocabList.columns = ['Vocabs']
+vocab_array = np.array([re.findall(r'\w+', string) for string in vocabList['Vocabs']])
+vocab_dict = {word : value for value,word in vocab_array}
 
 spamTrain = load('spamTrain.mat')
 X_train = np.array(spamTrain['X']) # 4000 used to train
@@ -20,9 +20,10 @@ spamTest = load('spamTest.mat')
 X_test = np.array(spamTest['Xtest']) # 1000 emails used to test
 y_test = np.array(spamTest['ytest']).flatten()
 
-## Clean and ready email for training ##
-
 def PreprocessEmail(emailText):
+    """
+    Clean email for training
+    """
     # Lower-casing
     text = emailText.lower()
     # Normalise numbers
@@ -37,38 +38,44 @@ def PreprocessEmail(emailText):
     text = re.sub('[$]+', 'dollar', text)
     return text
 
-# Clean email
-processedData = PreprocessEmail(emailData)
+def Email_Feature_Conversion(fileName):
+    """
+    Extract features from email
+    """
+    emailData = open(fileName + '.txt', 'r').read()
+    # Clean email
+    processedData = PreprocessEmail(emailData)
+    # Tokenize email
+    tokenizer = RegexpTokenizer(r'\w+')
+    tokens = tokenizer.tokenize(processedData)
+    # Stem words
+    ps = PorterStemmer()
+    stemmedTokens = [ps.stem(word) for word in tokens]
+    # Convert vocab to dictionary
+    mappedTokens = np.array([vocab_dict[token] for token in stemmedTokens if token in vocab_dict.keys()])
+    featureVector = np.zeros((vocab_array.shape[0], 1))
+    for value in mappedTokens:
+        featureVector[int(value)] = 1
+    return featureVector
 
-# Tokenize email
-tokenizer = RegexpTokenizer(r'\w+')
-tokens = tokenizer.tokenize(processedData)
+def ExtractFeatures(emails):
+    testSample = np.zeros((vocab_array.shape[0], 1))
+    for email in emailFiles:
+        feature = Email_Feature_Conversion(email)
+        testSample = np.append(testSample, feature, axis=1)
+    return testSample.T
 
-# Stem words
-ps = PorterStemmer()
-stemmedTokens = [ps.stem(word) for word in tokens]
+emailFiles = np.array(['emailSample1','emailSample2','spamSample1','spamSample2','realEmail1','realEmail2','realSpam1','realSpam2'])
+features = ExtractFeatures(emailFiles)
 
-# Convert vocab to dictionary
-vocab_array = np.array([re.findall(r'\w+', string) for string in vocabList['Vocabs']])
-vocab_dict = {word : value for value,word in vocab_array}
-
-mappedTokens = np.array([vocab_dict[token] for token in stemmedTokens if token in vocab_dict.keys()])
-
-featureVector = np.zeros((vocab_array.shape[0], 1))
-
-for value in mappedTokens:
-    featureVector[int(value)] = 1
-
-## Training and Testing Model ##
-
-# Gaussian Kernel
+## Model training and evaluation ##
 def GaussianKernel(sigma):
     """
     Returns similarity matrix
     """
     def GaussianFunction(X1, X2):
         """
-        Calculate similarity between 2 points
+        Calculate similarity between 2 points using a gaussian function
         """
         matrix = np.zeros((X1.shape[0], X2.shape[0]))
         for i, xi in enumerate(X1):
@@ -104,3 +111,15 @@ indexValues = df_theta.index.values
 numWords = 15
 top_spam_indicators = [vocab_array[indexValues[i]][1] for i in range(numWords)]
 print("Top 15 Spam Indicators: " + str(top_spam_indicators))
+
+print('\n--Gaussian Kernel--')
+predictions_Gaus = model_Gaus.predict(features)
+for index, email in enumerate(emailFiles):
+    print('Email:', email )
+    print('Spam') if predictions_Gaus[index] == 1 else print('Not spam')
+
+print('\n--Linear Kernel--')
+predictions_Lin = model_Lin.predict(features)
+for index, email in enumerate(emailFiles):
+    print('Email:', email )
+    print('Spam') if predictions_Lin[index] == 1 else print('Not spam')
