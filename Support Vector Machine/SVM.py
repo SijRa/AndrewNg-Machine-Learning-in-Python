@@ -17,6 +17,8 @@ y2 = np.array(data2['y']).flatten()
 
 X3 = np.array(data3['X'])
 y3 = np.array(data3['y']).flatten()
+X3val = np.array(data3['Xval'])
+y3val = np.array(data3['yval']).flatten()
 
 # Gaussian Kernel
 def GaussianKernel(sigma):
@@ -106,11 +108,12 @@ plt.scatter(plus3['X₁'], plus3['X₂'], marker='+', c='black')
 
 for cValue in cValues:
     model3 = SVC(C=cValue, kernel=GaussianKernel(0.1)).fit(X3, y3)
+    accuracy = model3.score(X3val, y3val)
     vals2 = np.zeros(m2X1.shape)
     plt.figure()
     plt.scatter(circle3['X₁'], circle3['X₂'], marker='.', c='red')
     plt.scatter(plus3['X₁'], plus3['X₂'], marker='+', c='black')
-    plt.title("Figure 3" + "\nC = " + str(cValue) + " Sigma = " + str(0.1))
+    plt.title("Figure 3" + "\n Mean Accuracy: " + str(accuracy) + "\nC = " + str(cValue) + " Sigma = " + str(0.1))
     for i in range(m2X1.shape[1]):
         x = np.array([m2X1[:,i], m2X2[:,i]]).T
         vals2[:,i] = model3.predict(x)
