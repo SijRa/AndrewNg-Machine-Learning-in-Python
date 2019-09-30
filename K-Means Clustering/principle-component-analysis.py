@@ -20,7 +20,7 @@ def FeatureNormalisation(X):
 
 def PCA(X):
     m, n = X.shape
-    sigma = np.divide(np.dot(X.T,X),m)
+    sigma = np.divide(np.matmul(X.T,X),m)
     U, S, V = np.linalg.svd(sigma)
     return U, S # Eigen vectors and Eigen values
 
